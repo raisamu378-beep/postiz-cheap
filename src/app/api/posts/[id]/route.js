@@ -19,6 +19,10 @@ export async function DELETE(req, { params }) {
         where: { id }
       });
 
+      if (post && post.userId !== session.user.id) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+
       if (post) {
         if (post.status === "processing") {
           return NextResponse.json({ error: "Cannot delete a post that is currently uploading." }, { status: 400 });
