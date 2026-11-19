@@ -20,6 +20,11 @@ export async function PATCH(req, { params }) {
     if (folder !== undefined) updateData.folder = folder;
     if (tags !== undefined) updateData.tags = typeof tags === "string" ? tags : Array.isArray(tags) ? tags.join(",") : "";
 
+    const existing = await prisma.mediaAsset.findUnique({ where: { id } });
+    if (existing && existing.userId !== session.user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     let updatedAsset = null;
 
     try {
@@ -51,6 +56,11 @@ export async function DELETE(req, { params }) {
     }
 
     const { id } = await params;
+
+    const existing = await prisma.mediaAsset.findUnique({ where: { id } });
+    if (existing && existing.userId !== session.user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     try {
       await prisma.mediaAsset.delete({
