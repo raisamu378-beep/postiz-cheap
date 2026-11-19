@@ -25,6 +25,7 @@ import {
   FiLogOut, 
   FiMenu, 
   FiDollarSign,
+  FiGrid,
   FiBarChart2
 } from "react-icons/fi";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -102,6 +103,11 @@ export default function AppShell({ children }) {
       icon: <FiShare2 className="w-5 h-5" />,
     },
     {
+      name: "Niches",
+      path: "/niches",
+      icon: <FiGrid className="w-5 h-5" />,
+    },
+    {
       name: "Media",
       path: "/media",
       icon: <FiImage className="w-5 h-5" />,
@@ -118,6 +124,7 @@ export default function AppShell({ children }) {
     if (pathname.startsWith("/analytics")) return "Analytics & Performance";
     if (pathname.startsWith("/agents")) return "AI Social Agent";
     if (pathname.startsWith("/integrations")) return "Channels & Integrations";
+    if (pathname.startsWith("/niches")) return "Niches & Accounts";
     if (pathname.startsWith("/media") || pathname.startsWith("/gallery")) return "Media Asset Library";
     if (pathname.startsWith("/pricing")) return "Pricing & Credits";
     if (pathname.startsWith("/login")) return "Sign In";
