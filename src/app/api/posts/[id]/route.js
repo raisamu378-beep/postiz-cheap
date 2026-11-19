@@ -119,13 +119,24 @@ export async function PATCH(req, { params }) {
             bodyData.tags = post.tags ? post.tags.split(",").map(t => t.trim()) : [];
             bodyData.privacy = post.privacy || "public";
             if (post.categoryId) bodyData.category_id = post.categoryId;
-            bodyData.madeForKids = post.madeForKids || false;
+            bodyData.made_for_kids = post.madeForKids || false;
           } else if (plat === "x") {
             bodyData.caption = captionText.substring(0, 280);
             bodyData.reply_settings = "everyone";
           } else if (plat === "tiktok") {
             bodyData.title = post.title || captionText;
-            bodyData.privacy_level = post.privacy || "PUBLIC_TO_EVERYONE";
+            const tiktokPrivacyMap = {
+              public: "PUBLIC_TO_EVERYONE",
+              unlisted: "SELF_ONLY",
+              private: "SELF_ONLY",
+              friends: "MUTUAL_FOLLOW_FRIENDS",
+              mutual_follow_friends: "MUTUAL_FOLLOW_FRIENDS",
+              follower_of_creator: "FOLLOWER_OF_CREATOR",
+              self_only: "SELF_ONLY",
+              public_to_everyone: "PUBLIC_TO_EVERYONE"
+            };
+            bodyData.privacy_level =
+              tiktokPrivacyMap[String(post.privacy || "public").toLowerCase()] || "PUBLIC_TO_EVERYONE";
           } else if (plat === "instagram" || plat === "facebook" || plat === "threads" || plat === "linkedin") {
             bodyData.caption = captionText;
             bodyData.placement = "timeline";
