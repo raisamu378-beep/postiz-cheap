@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Social Media Integrations Manager
  * Central registry and dispatcher for all supported social platforms.
  */
@@ -122,44 +122,7 @@ export const PLATFORMS_CONFIG = {
 };
 
 // In-memory store for connected accounts (used when running in demo/offline mode or alongside DB)
-let fallbackAccounts = [
-  {
-    id: 101,
-    platform: 1,
-    platform_name: "youtube",
-    account_name: "Creator YouTube Channel",
-    platform_user_id: "UC_demo_yt_101",
-    connected_at: new Date(Date.now() - 86400000 * 5).toISOString(),
-    status: "active"
-  },
-  {
-    id: 102,
-    platform: 2,
-    platform_name: "tiktok",
-    account_name: "Creator TikTok Studio",
-    platform_user_id: "@creator_tiktok",
-    connected_at: new Date(Date.now() - 86400000 * 3).toISOString(),
-    status: "active"
-  },
-  {
-    id: 103,
-    platform: 4,
-    platform_name: "x_twitter",
-    account_name: "Creator Studio (@creator_hub)",
-    platform_user_id: "148920194820",
-    connected_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-    status: "active"
-  },
-  {
-    id: 104,
-    platform: 3,
-    platform_name: "instagram",
-    account_name: "creator_studio_official",
-    platform_user_id: "ig_business_104",
-    connected_at: new Date(Date.now() - 86400000).toISOString(),
-    status: "active"
-  }
-];
+let fallbackAccounts = [];
 
 export const SocialAccountStore = {
   getAll: () => [...fallbackAccounts],
