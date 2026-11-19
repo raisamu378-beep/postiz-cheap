@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isOwner } from "@/lib/owner";
 import { DemoStore } from "@/lib/demo-store";
 
 // DELETE: Delete or Cancel a post
@@ -55,6 +56,10 @@ export async function PATCH(req, { params }) {
         where: { id }
       });
 
+      if (post && post.userId !== session.user.id) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+
       if (post) {
         if (body.action === "publish_now" && post.status === "processing") {
           return NextResponse.json({ error: "Cannot publish a post that is currently uploading." }, { status: 400 });
@@ -65,7 +70,7 @@ export async function PATCH(req, { params }) {
           let targetAccountId = post.accountId;
           const plat = (post.platform || "").toLowerCase().replace("x_twitter", "x").replace("twitter", "x");
           
-          if (!targetAccountId || targetAccountId === 101) {
+          if ((!targetAccountId || targetAccountId === 101) && isOwner(session.user.email)) {
             try {
               const accRes = await fetch("https://muapi.ai/api/social/accounts", {
                 headers: { "x-api-key": config.ai.apiKey }
