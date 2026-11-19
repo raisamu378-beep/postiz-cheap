@@ -48,6 +48,7 @@ model User {
   mediaAssets    MediaAsset[]
   AppInstance    AppInstance[]
   Creation       Creation[]
+  niches         Niche[]
 }
 
 model VerificationToken {
@@ -61,6 +62,8 @@ model VerificationToken {
 model ScheduledPost {
   id             String    @id @default(cuid())
   userId         String
+  nicheId        String?
+  batchId        String?
   accountId      Int
   platform       String
   accountName    String
@@ -79,6 +82,7 @@ model ScheduledPost {
   scheduledAt    DateTime
   status         String    @default("scheduled")
   requestId      String?   @unique
+  niche          Niche?    @relation(fields: [nicheId], references: [id], onDelete: SetNull)
   publishedUrl   String?   @db.Text
   error          String?   @db.Text
   createdAt      DateTime  @default(now())
@@ -154,3 +158,30 @@ model Creation {
   User         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+
+model Niche {
+  id        String         @id @default(cuid())
+  userId    String
+  name      String
+  emoji     String?
+  color     String         @default("#612bd3")
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accounts  NicheAccount[]
+  posts     ScheduledPost[]
+
+  @@unique([userId, name])
+}
+
+model NicheAccount {
+  id          String   @id @default(cuid())
+  nicheId     String
+  platform    String
+  accountId   Int
+  accountName String
+  createdAt   DateTime @default(now())
+  niche       Niche    @relation(fields: [nicheId], references: [id], onDelete: Cascade)
+
+  @@unique([nicheId, platform])
+}
