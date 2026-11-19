@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { DemoStore } from "@/lib/demo-store";
 import config from "@/lib/config";
 import { SocialAccountStore } from "@/lib/integrations/social-manager";
+import { isOwner } from "@/lib/owner";
 
 function extractMetrics(post) {
   let impressions = 0;
@@ -102,7 +103,7 @@ export async function GET(req) {
         }
       } catch (_) {}
 
-      try {
+      if (isOwner(email)) try {
         const devRes = await fetch("https://muapi.ai/api/social/accounts", {
           headers: { "x-api-key": apiKey },
           signal: AbortSignal.timeout(3000),
