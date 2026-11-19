@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import config from "@/lib/config";
 import { SocialAccountStore, PLATFORMS_CONFIG } from "@/lib/integrations/social-manager";
+import { isOwner } from "@/lib/owner";
 
 const PLATFORM_ID_MAP = {
   youtube: 1,
@@ -61,8 +62,8 @@ export async function GET(req) {
         console.error("Failed to fetch external accounts:", err);
       }
 
-      // 2. Fetch first-party accounts (connected under the developer's key)
-      try {
+      // 2. Fetch first-party accounts (connected under the developer's key) - OWNER ONLY
+      if (isOwner(session.user.email)) try {
         const devRes = await fetch("https://muapi.ai/api/social/accounts", {
           headers: { "x-api-key": apiKey }
         });
