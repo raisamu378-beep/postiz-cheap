@@ -273,9 +273,28 @@ export async function POST(req) {
       replySettings = "everyone"
     } = body;
 
-    const targetPlatforms = Array.isArray(body.platforms) && body.platforms.length > 0
+    let targetPlatforms = Array.isArray(body.platforms) && body.platforms.length > 0
       ? body.platforms
       : (body.platform ? [body.platform] : []);
+
+    // Niche mode: resolve this niche's connected account for each platform
+    let nicheRecord = null;
+    const nicheAccountMap = {};
+    const batchId = body.batchId || ("batch_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8));
+    if (body.nicheId) {
+      nicheRecord = await prisma.niche.findFirst({
+        where: { id: body.nicheId, userId },
+        include: { accounts: true }
+      });
+      if (!nicheRecord) {
+        return NextResponse.json({ error: "Niche not found" }, { status: 404 });
+      }
+      for (const acc of nicheRecord.accounts) nicheAccountMap[acc.platform] = acc;
+      if (targetPlatforms.length === 0) {
+        targetPlatforms = nicheRecord.accounts.map((a) => a.platform);
+      }
+      targetPlatforms = targetPlatforms.filter((p) => !!nicheAccountMap[(p || "").toLowerCase()]);
+    }
 
     if (!mediaUrl || targetPlatforms.length === 0) {
       return NextResponse.json({ error: "Missing required fields: at least one platform and mediaUrl are mandatory." }, { status: 400 });
@@ -322,6 +341,11 @@ export async function POST(req) {
       let platAccountId = platformAccountMap[plat] || platformAccountMap[normPlat];
       let platAccountName = accountName;
 
+      if (nicheAccountMap[normPlat]) {
+        platAccountId = nicheAccountMap[normPlat].accountId;
+        platAccountName = nicheAccountMap[normPlat].accountName;
+      }
+
       if (!platAccountId || platAccountId === 101) {
         const matched = devAccounts.find(a => (a.platform_name || "").toLowerCase() === normPlat);
         if (matched) {
@@ -345,6 +369,8 @@ export async function POST(req) {
           const post = await prisma.scheduledPost.create({
             data: {
               userId,
+              nicheId: nicheRecord ? nicheRecord.id : null,
+              batchId,
               accountId: platAccountId,
               platform: plat,
               accountName: platAccountName,
@@ -431,6 +457,8 @@ export async function POST(req) {
           const post = await prisma.scheduledPost.create({
             data: {
               userId,
+              nicheId: nicheRecord ? nicheRecord.id : null,
+              batchId,
               accountId: platAccountId,
               platform: plat,
               accountName: platAccountName,
@@ -485,7 +513,9 @@ export async function POST(req) {
     return NextResponse.json({
       success: true,
       posts: createdPosts,
-      count: createdPosts.length
+      count: createdPosts.length,
+      batchId,
+      nicheId: nicheRecord ? nicheRecord.id : null
     });
   } catch (error) {
     console.error("[POST_POSTS_ERROR]", error);
