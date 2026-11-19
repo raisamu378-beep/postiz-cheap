@@ -126,6 +126,8 @@ export default function PostComposerModal({
   const [activePreviewPlatform, setActivePreviewPlatform] = useState("youtube");
   const [connectedAccounts, setConnectedAccounts] = useState([]);
   const [platformAccountMap, setPlatformAccountMap] = useState({});
+  const [niches, setNiches] = useState([]);
+  const [selectedNicheId, setSelectedNicheId] = useState(null);
   const [accountName, setAccountName] = useState("Creator Studio");
   const [accountId, setAccountId] = useState("101");
   const [title, setTitle] = useState("");
@@ -222,6 +224,7 @@ export default function PostComposerModal({
   const [connectError, setConnectError] = useState("");
 
   const togglePlatform = (key) => {
+    setSelectedNicheId(null);
     setSelectedPlatforms((prev) => {
       if (prev.includes(key)) {
         if (prev.length === 1) return prev; // keep at least 1 selected
@@ -255,6 +258,30 @@ export default function PostComposerModal({
     setSelectedPlatforms([key]);
     setActivePreviewPlatform(key);
   };
+
+  const selectNicheGroup = (niche) => {
+    const accounts = niche.accounts || [];
+    if (accounts.length === 0) {
+      setErrorMsg(`"${niche.name}" ma kunai account jodiyeko chhaina. Niches page bata account jodnus.`);
+      return;
+    }
+    const keys = [];
+    const map = {};
+    for (const a of accounts) {
+      const key = getPlatformKey({ platform_name: a.platform });
+      if (!PLATFORMS.some((p) => p.key === key)) continue;
+      if (!keys.includes(key)) keys.push(key);
+      map[key] = a.accountId;
+    }
+    if (keys.length === 0) return;
+    setSelectedNicheId(niche.id);
+    setSelectedPlatforms(keys);
+    setPlatformAccountMap((prev) => ({ ...prev, ...map }));
+    setActivePreviewPlatform(keys[0]);
+    setErrorMsg("");
+  };
+
+  const clearNicheGroup = () => setSelectedNicheId(null);
 
   // YouTube options
   const [categoryId, setCategoryId] = useState("22");
@@ -369,6 +396,10 @@ export default function PostComposerModal({
   useEffect(() => {
     if (isOpen) {
       fetchAccounts();
+      fetch("/api/niches")
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => setNiches(Array.isArray(data) ? data : []))
+        .catch(() => setNiches([]));
     }
   }, [isOpen, initialPost]);
 
@@ -671,6 +702,7 @@ export default function PostComposerModal({
         destinationLink,
         boardId,
         replySettings,
+        nicheId: selectedNicheId || undefined,
       };
 
       const url = initialPost?.id ? `/api/posts/${initialPost.id}` : "/api/posts";
@@ -792,6 +824,33 @@ export default function PostComposerModal({
                   </div>
                 )}
               </div>
+
+              {niches.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 pb-0.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                    Niche group:
+                  </span>
+                  {niches.map((n) => {
+                    const active = selectedNicheId === n.id;
+                    const count = (n.accounts || []).length;
+                    return (
+                      <button
+                        key={n.id}
+                        type="button"
+                        onClick={() => (active ? clearNicheGroup() : selectNicheGroup(n))}
+                        className={`px-2.5 py-1 rounded-full border text-[10px] font-bold transition-all cursor-pointer ${
+                          active
+                            ? "bg-[#612bd3]/15 border-[#612bd3]/60 text-[#612bd3] dark:text-white shadow-sm shadow-[#612bd3]/20"
+                            : "border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700"
+                        }`}
+                      >
+                        {n.emoji || "📁"} {n.name}
+                        <span className={count >= 4 ? " text-emerald-500" : " text-amber-500"}> ({count}/4)</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
 
               {connectedPlatforms.length === 0 ? (
                 /* Empty state when no channels are connected */
