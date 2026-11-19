@@ -31,6 +31,12 @@ async function triggerMuApiPublish(platform, payload) {
     payload.tags ? payload.tags.split(",").map(t => t.trim().startsWith("#") ? t.trim() : `#${t.trim()}`).join(" ") : ""
   ].filter(Boolean).join("\n\n");
 
+  if (typeof payload.mediaUrl !== "string" || !/^https?:\/\//i.test(payload.mediaUrl)) {
+    throw new Error(
+      "Media URL must be a public http(s) link. The video was never uploaded (local blob URL) — re-upload the video before scheduling."
+    );
+  }
+
   const bodyData = {
     account_id: parseInt(payload.accountId),
     media_url: payload.mediaUrl
@@ -45,7 +51,18 @@ async function triggerMuApiPublish(platform, payload) {
     bodyData.made_for_kids = payload.madeForKids || false;
   } else if (plat === "tiktok") {
     bodyData.title = payload.title || captionText;
-    bodyData.privacy_level = payload.privacy || "PUBLIC_TO_EVERYONE";
+    const tiktokPrivacyMap = {
+      public: "PUBLIC_TO_EVERYONE",
+      unlisted: "SELF_ONLY",
+      private: "SELF_ONLY",
+      friends: "MUTUAL_FOLLOW_FRIENDS",
+      mutual_follow_friends: "MUTUAL_FOLLOW_FRIENDS",
+      follower_of_creator: "FOLLOWER_OF_CREATOR",
+      self_only: "SELF_ONLY",
+      public_to_everyone: "PUBLIC_TO_EVERYONE"
+    };
+    bodyData.privacy_level =
+      tiktokPrivacyMap[String(payload.privacy || "public").toLowerCase()] || "PUBLIC_TO_EVERYONE";
     bodyData.disable_comment = payload.disableComment || false;
     bodyData.disable_duet = payload.disableDuet || false;
     bodyData.disable_stitch = payload.disableStitch || false;
