@@ -601,13 +601,11 @@ export default function PostComposerModal({
         body: formData,
       });
 
-      let finalUrl = "";
-      if (!res.ok) {
-        finalUrl = URL.createObjectURL(file);
-      } else {
-        const data = await res.json();
-        finalUrl = data.url || URL.createObjectURL(file);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || "Upload failed — video server ma save bhayena. Feri try garnus.");
       }
+      const finalUrl = data.url;
 
       if (activeComposerTab === "all") {
         setMediaUrl(finalUrl);
@@ -621,19 +619,19 @@ export default function PostComposerModal({
         }));
       }
     } catch (err) {
-      console.warn("Upload fallback used:", err);
-      const fallbackUrl = URL.createObjectURL(file);
+      console.warn("Upload failed:", err);
       if (activeComposerTab === "all") {
-        setMediaUrl(fallbackUrl);
+        setMediaUrl("");
       } else {
-        setPlatformOverrides((prev) => ({
-          ...prev,
-          [activeComposerTab]: {
-            ...prev[activeComposerTab],
-            mediaUrl: fallbackUrl,
-          },
-        }));
+        setPlatformOverrides((prev) => {
+          const copy = { ...prev };
+          const current = { ...copy[activeComposerTab] };
+          delete current.mediaUrl;
+          copy[activeComposerTab] = current;
+          return copy;
+        });
       }
+      setErrorMsg(err.message || "Upload failed. Please retry.");
     } finally {
       setUploading(false);
     }
@@ -664,6 +662,13 @@ export default function PostComposerModal({
     const hasAnyMedia = mediaUrl || Object.values(platformOverrides).some((o) => !!o.mediaUrl);
     if (!hasAnyMedia) {
       setErrorMsg("Please upload or provide a media URL for your post.");
+      return;
+    }
+
+    const allMedia = [mediaUrl, ...Object.values(platformOverrides).map((o) => o && o.mediaUrl)].filter(Boolean);
+    const hasLocalOnly = allMedia.some((u) => /^(blob:|data:)/i.test(String(u)));
+    if (hasLocalOnly) {
+      setErrorMsg("Video upload baki cha — local preview (blob) publish huna sakdaina. File feri upload garnus.");
       return;
     }
 
