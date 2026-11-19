@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import config from "@/lib/config";
 import { SocialAccountStore } from "@/lib/integrations/social-manager";
+import { isOwner } from "@/lib/owner";
 
 // DELETE: Disconnect account
 export async function DELETE(req, { params }) {
@@ -22,7 +23,7 @@ export async function DELETE(req, { params }) {
         headers: { "x-api-key": apiKey }
       });
 
-      if (!res.ok) {
+      if (!res.ok && isOwner(session.user.email)) {
         res = await fetch(`https://muapi.ai/api/social/accounts/${id}`, {
           method: "DELETE",
           headers: { "x-api-key": apiKey }
@@ -67,7 +68,7 @@ export async function PATCH(req, { params }) {
         body: JSON.stringify({ account_name: accountName })
       });
 
-      if (!res.ok) {
+      if (!res.ok && isOwner(session.user.email)) {
         res = await fetch(`https://muapi.ai/api/social/accounts/${id}`, {
           method: "PATCH",
           headers: {
