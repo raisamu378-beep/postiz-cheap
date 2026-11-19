@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { UserService } from "@/lib/services/user";
 import config from "@/lib/config";
 import { DemoStore } from "@/lib/demo-store";
+import { isOwner } from "@/lib/owner";
 
 // Helper function to call the MuAPI publishing endpoints
 async function triggerMuApiPublish(platform, payload) {
@@ -116,7 +117,7 @@ export async function GET(req) {
     
     // Pre-fetch connected accounts if any due post has a dummy or missing accountId
     let devAccounts = null;
-    if (duePosts.some(p => !p.accountId || p.accountId === 101) && config.ai.apiKey) {
+    if (duePosts.some(p => !p.accountId || p.accountId === 101) && config.ai.apiKey && isOwner(session.user.email)) {
       try {
         const accRes = await fetch("https://muapi.ai/api/social/accounts", {
           headers: { "x-api-key": config.ai.apiKey }
@@ -307,7 +308,7 @@ export async function POST(req) {
     const platformAccountMap = body.platformAccountMap || {};
 
     let devAccounts = [];
-    if (config.ai.apiKey) {
+    if (config.ai.apiKey && isOwner(session.user.email)) {
       try {
         const accRes = await fetch("https://muapi.ai/api/social/accounts", {
           headers: { "x-api-key": config.ai.apiKey }
