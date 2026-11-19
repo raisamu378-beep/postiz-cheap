@@ -35,6 +35,12 @@ function platformMeta(key) {
   return PLATFORMS.find((p) => p.key === key) || PLATFORMS[0];
 }
 
+function platformLabel(key) {
+  if (key === "youtube") return "YT";
+  const meta = PLATFORMS.find((p) => p.key === key);
+  return meta ? meta.name : key;
+}
+
 function toLocalInput(date) {
   const pad = (n) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
@@ -54,6 +60,7 @@ function NichesInner() {
   const [newNiche, setNewNiche] = useState({ name: "", emoji: "📁" });
 
   const [attachTarget, setAttachTarget] = useState(null); // { niche, platform }
+  const [connectName, setConnectName] = useState("");
 
   const [selectedNicheId, setSelectedNicheId] = useState("");
   const [file, setFile] = useState(null);
@@ -100,14 +107,44 @@ function NichesInner() {
     })();
   }, [status]);
 
-  // After returning from a MuAPI OAuth connect flow
+  // After returning from a MuAPI OAuth connect flow: auto-name the new account
   useEffect(() => {
     const connected = searchParams.get("connected");
     const nicheId = searchParams.get("niche");
     if (!connected || !nicheId || !niches.length) return;
     const niche = niches.find((n) => n.id === nicheId);
-    if (niche) setAttachTarget({ niche, platform: connected });
-  }, [searchParams, niches]);
+    if (!niche) return;
+
+    (async () => {
+      let pending = null;
+      try {
+        pending = JSON.parse(localStorage.getItem("pcz_pending_connect") || "null");
+      } catch (_) {}
+
+      if (pending && pending.platform === connected && pending.nicheId === nicheId) {
+        const known = new Set((pending.knownIds || []).map(String));
+        const fresh = socialAccounts
+          .filter((a) => String(a.platform_name || "").toLowerCase() === connected && !known.has(String(a.id)))
+          .sort((a, b) => Number(b.id) - Number(a.id));
+        const newest = fresh[0];
+        if (newest && pending.name) {
+          await fetch(`/api/social/accounts/${newest.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ accountName: pending.name }),
+          });
+          await Promise.all([loadSocialAccounts(), loadNiches()]);
+          setNotice(`Account renamed to "${pending.name}"`);
+        }
+        try {
+          localStorage.removeItem("pcz_pending_connect");
+        } catch (_) {}
+      }
+
+      setAttachTarget({ niche, platform: connected });
+      setConnectName(`${niche.name} ${platformLabel(connected)}`);
+    })();
+  }, [searchParams, niches, socialAccounts]);
 
   const selectedNiche = useMemo(
     () => niches.find((n) => n.id === selectedNicheId) || null,
@@ -152,12 +189,27 @@ function NichesInner() {
 
   const startConnect = async (niche, platform) => {
     setError("");
+    const label = (connectName || "").trim() || `${niche.name} ${platformLabel(platform)}`;
+    try {
+      localStorage.setItem(
+        "pcz_pending_connect",
+        JSON.stringify({
+          platform,
+          nicheId: niche.id,
+          name: label,
+          knownIds: socialAccounts
+            .filter((a) => String(a.platform_name || "").toLowerCase() === platform)
+            .map((a) => String(a.id)),
+        })
+      );
+    } catch (_) {}
+
     const res = await fetch("/api/social/connect", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         platform,
-        accountName: `${niche.name} ${platform}`,
+        accountName: label,
         redirectUrl: `${window.location.origin}/niches?connected=${platform}&niche=${niche.id}`,
       }),
     });
@@ -190,6 +242,40 @@ function NichesInner() {
       const data = await res.json().catch(() => ({}));
       setError(data.error || "Could not attach account");
     }
+  };
+
+  const renameAccount = async (account, explicitName) => {
+    const current = account.account_name || "";
+    const input = explicitName !== undefined ? explicitName : window.prompt("Account / channel name", current);
+    const name = (input || "").trim();
+    if (!name || name === current) return;
+
+    const res = await fetch(`/api/social/accounts/${account.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountName: name }),
+    });
+    if (!res.ok) {
+      setError("Rename failed");
+      return;
+    }
+
+    const platform = String(account.platform_name || "").toLowerCase();
+    for (const n of niches) {
+      const hit = (n.accounts || []).find(
+        (a) => a.platform === platform && Number(a.accountId) === Number(account.id)
+      );
+      if (hit) {
+        await fetch(`/api/niches/${n.id}/accounts`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ platform, accountId: account.id, accountName: name }),
+        });
+      }
+    }
+
+    await Promise.all([loadSocialAccounts(), loadNiches()]);
+    setNotice(`Renamed to "${name}"`);
   };
 
   const detachAccount = async (niche, platform) => {
@@ -333,7 +419,14 @@ function NichesInner() {
                     return (
                       <div key={key} className="relative">
                         <button
-                          onClick={() => (acc ? detachAccount(niche, key) : setAttachTarget({ niche, platform: key }))}
+                          onClick={() => {
+                            if (acc) {
+                              detachAccount(niche, key);
+                              return;
+                            }
+                            setAttachTarget({ niche, platform: key });
+                            setConnectName(`${niche.name} ${platformLabel(key)}`);
+                          }}
                           title={acc ? `${acc.accountName} — click to detach` : `Connect ${key}`}
                           className={`w-8 h-8 rounded-lg border flex items-center justify-center transition ${
                             acc
@@ -592,6 +685,15 @@ function NichesInner() {
                 <p className="text-xs text-secondary-text">
                   Yo platform ma kunai account connected chhaina. Pahila connect garnus — MuAPI OAuth kholinchha.
                 </p>
+                <input
+                  value={connectName}
+                  onChange={(e) => setConnectName(e.target.value)}
+                  placeholder="Channel name (e.g. GTA6 Universe YT)"
+                  className="w-full bg-bg-page border border-divider rounded-lg px-3 py-2.5 text-xs outline-none focus:border-primary"
+                />
+                <p className="text-[10px] text-secondary-text">
+                  Yo naam mai account save hunchha (pachi pencil bata rename pani garna sakinchha).
+                </p>
                 <button
                   onClick={() => startConnect(attachTarget.niche, attachTarget.platform)}
                   className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-lg bg-primary text-white text-xs font-bold"
@@ -601,23 +703,43 @@ function NichesInner() {
               </div>
             ) : (
               <div className="space-y-2 max-h-72 overflow-auto">
-                <p className="text-[11px] text-secondary-text">Kun account yo niche ma use garne?</p>
+                <p className="text-[11px] text-secondary-text">Kun account yo niche ma use garne? (✏️ = rename)</p>
                 {availableAccounts(attachTarget.platform).map((acc) => (
-                  <button
+                  <div
                     key={acc.id}
-                    onClick={() => attachAccount(attachTarget.niche, attachTarget.platform, acc)}
-                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg border border-divider hover:border-primary/50 text-left transition"
+                    className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg border border-divider hover:border-primary/50 transition"
                   >
-                    <span className="text-xs font-bold truncate">{acc.account_name}</span>
-                    <span className="text-[10px] text-secondary-text">#{acc.id}</span>
-                  </button>
+                    <button
+                      onClick={() => attachAccount(attachTarget.niche, attachTarget.platform, acc)}
+                      className="flex-1 text-left min-w-0"
+                    >
+                      <span className="text-xs font-bold truncate block">{acc.account_name}</span>
+                      <span className="text-[10px] text-secondary-text">#{acc.id}</span>
+                    </button>
+                    <button
+                      onClick={() => renameAccount(acc)}
+                      title="Rename account"
+                      className="text-secondary-text hover:text-primary p-1"
+                    >
+                      <FiEdit2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 ))}
-                <button
-                  onClick={() => startConnect(attachTarget.niche, attachTarget.platform)}
-                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-lg border border-divider text-xs font-bold hover:border-primary/50"
-                >
-                  <FiPlus /> Connect another account
-                </button>
+
+                <div className="pt-3 space-y-2 border-t border-divider">
+                  <input
+                    value={connectName}
+                    onChange={(e) => setConnectName(e.target.value)}
+                    placeholder="New channel name (e.g. GTA6 Universe YT)"
+                    className="w-full bg-bg-page border border-divider rounded-lg px-3 py-2.5 text-xs outline-none focus:border-primary"
+                  />
+                  <button
+                    onClick={() => startConnect(attachTarget.niche, attachTarget.platform)}
+                    className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-lg border border-divider text-xs font-bold hover:border-primary/50"
+                  >
+                    <FiPlus /> Connect another account
+                  </button>
+                </div>
               </div>
             )}
           </div>
